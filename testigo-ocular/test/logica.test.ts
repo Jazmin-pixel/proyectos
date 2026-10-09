@@ -4,6 +4,7 @@ import {
   CANTIDAD_PREGUNTAS,
   DURACION_OBSERVACION_MS,
   crearPartida,
+  
   responderPregunta,
 } from '../src/logica.ts'
 
