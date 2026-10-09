@@ -1,3 +1,4 @@
+// Versión final optimizada
 import './estilo.css'
 import {
   DURACION_OBSERVACION_MS,
