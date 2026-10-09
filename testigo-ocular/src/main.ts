@@ -1,10 +1,10 @@
-// Versión final optimizada
 import './estilo.css'
-import {
-  DURACION_OBSERVACION_MS,
-  crearPartida,
-  responderPregunta,
-  type EstadoPartida,
+import { 
+  crearPartida, 
+  responderPregunta, 
+  NIVELES_DIFICULTAD,
+  type EstadoPartida, 
+  type Dificultad 
 } from './logica.ts'
 
 const app = document.querySelector<HTMLDivElement>('#app')
@@ -14,144 +14,118 @@ if (!app) {
 }
 
 const raiz = app
+let dificultadActual: Dificultad = 'normal'
 let partida: EstadoPartida | null = null
-let inicioObservacion = 0
-let temporizadorVisual: number | undefined
 
-function detenerTemporizadorVisual(): void {
-  if (temporizadorVisual !== undefined) {
-    window.clearInterval(temporizadorVisual)
-    temporizadorVisual = undefined
-  }
-}
-
-function dibujarInicio(): void {
+function renderizarPantallaInicio() {
+  const config = NIVELES_DIFICULTAD[dificultadActual]
+  
   raiz.innerHTML = `
-    <main class="panel panel-inicio">
-      <p class="etiqueta">JUEGO DE MEMORIA</p>
+    <div class="card">
+      <h2>JUEGO DE MEMORIA</h2>
       <h1>Testigo Ocular</h1>
-      <p class="introduccion">Observá con atención una escena y luego respondé las preguntas de memoria.</p>
-      <ul class="instrucciones">
-        <li>Memorizá los objetos que aparecen.</li>
-        <li>La escena estará visible durante cinco segundos.</li>
-        <li>Respondé si cada objeto estaba en la escena.</li>
-      </ul>
-      <button class="boton boton-principal" type="button" data-accion="iniciar">Comenzar partida</button>
-    </main>
+      <p>Observa con atención una escena con ${config.cantidadObjetos} objetos durante ${config.duracionMs / 1000} segundos y luego responde las preguntas.</p>
+      
+      <div style="margin: 1.5rem 0;">
+        <p style="margin-bottom: 0.5rem; font-weight: bold; color: var(--text-main);">Selecciona la Dificultad:</p>
+        <div style="display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+          <button class="btn-dif" data-dif="facil" style="padding: 0.5rem 1rem; ${dificultadActual === 'facil' ? 'background: #2563eb; border-color: #60a5fa;' : 'background: #1e293b;'}">Fácil</button>
+          <button class="btn-dif" data-dif="normal" style="padding: 0.5rem 1rem; ${dificultadActual === 'normal' ? 'background: #2563eb; border-color: #60a5fa;' : 'background: #1e293b;'}">Normal</button>
+          <button class="btn-dif" data-dif="pesadilla" style="padding: 0.5rem 1rem; ${dificultadActual === 'pesadilla' ? 'background: #2563eb; border-color: #60a5fa;' : 'background: #1e293b;'}">Pesadilla</button>
+        </div>
+      </div>
+
+      <button id="btn-comenzar">Comenzar Partida</button>
+    </div>
   `
+
+  raiz.querySelectorAll('.btn-dif').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      dificultadActual = (e.currentTarget as HTMLElement).getAttribute('data-dif') as Dificultad
+      renderizarPantallaInicio()
+    })
+  })
+
+  raiz.querySelector('#btn-comenzar')?.addEventListener('click', () => {
+    const cfg = NIVELES_DIFICULTAD[dificultadActual]
+    partida = crearPartida()
+    renderizarEscena(cfg.duracionMs, cfg.cantidadObjetos)
+  })
 }
 
-function dibujarObservacion(): void {
+function renderizarEscena(duracionMs: number, cantidadObjetos: number) {
   if (!partida) return
+
+  const objetosVisibles = partida.objetosEscena.slice(0, cantidadObjetos)
 
   raiz.innerHTML = `
-    <main class="panel panel-escena">
-      <p class="etiqueta">OBSERVÁ LA ESCENA</p>
-      <h1>Memorizá estos objetos</h1>
-      <p class="temporizador" aria-live="polite">Quedan <span id="cuenta-regresiva">5</span> segundos</p>
-      <ul class="objetos" aria-label="Objetos de la escena">
-        ${partida.objetosEscena.map((objeto) => `<li>${objeto}</li>`).join('')}
-      </ul>
-    </main>
+    <div class="card">
+      <h2>Memoriza la escena</h2>
+      <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin: 2rem 0;">
+        ${objetosVisibles.map(obj => `<span style="background: #1e293b; padding: 1rem; border-radius: 8px; border: 1px solid #60a5fa;">📦 ${obj}</span>`).join('')}
+      </div>
+      <p>Tiempo restante: <span id="contador">${duracionMs / 1000}</span>s</p>
+    </div>
   `
 
-  inicioObservacion = performance.now()
-  detenerTemporizadorVisual()
-  temporizadorVisual = window.setInterval(actualizarObservacion, 100)
+  let segundosRestantes = Math.ceil(duracionMs / 1000)
+  const spanContador = raiz.querySelector('#contador')
+
+  const intervalo = setInterval(() => {
+    segundosRestantes--
+    if (spanContador) spanContador.textContent = String(segundosRestantes)
+
+    if (segundosRestantes <= 0) {
+      clearInterval(intervalo)
+      renderizarPregunta()
+    }
+  }, 1000)
 }
 
-function actualizarObservacion(): void {
+function renderizarPregunta() {
   if (!partida) return
+  const preguntaActual = partida.preguntas[partida.indicePregunta]
 
-  if (partida.fase !== 'observacion') {
-    detenerTemporizadorVisual()
-    dibujarEstadoPartida()
+  if (!preguntaActual) {
+    renderizarResultado()
     return
   }
 
-  const transcurrido = performance.now() - inicioObservacion
-  const segundosRestantes = Math.ceil(
-    Math.max(0, DURACION_OBSERVACION_MS - transcurrido) / 1_000,
-  )
-  const cuentaRegresiva = document.querySelector<HTMLSpanElement>(
-    '#cuenta-regresiva',
-  )
-  if (cuentaRegresiva) {
-    cuentaRegresiva.textContent = String(segundosRestantes)
-  }
-}
-
-function dibujarPreguntas(): void {
-  if (!partida) return
-
-  const pregunta = partida.preguntas[partida.indicePregunta]
-  if (!pregunta) return
-
-  const comentario =
-    partida.ultimaRespuesta === null
-      ? ''
-      : `<p class="comentario">Respuesta ${partida.ultimaRespuesta}.</p>`
-
   raiz.innerHTML = `
-    <main class="panel panel-pregunta">
-      <p class="etiqueta">PREGUNTA ${partida.indicePregunta + 1} DE ${partida.preguntas.length}</p>
-      <h1>${pregunta.texto}</h1>
-      <p class="puntaje">Puntaje: ${partida.puntaje}</p>
-      ${comentario}
-      <div class="acciones-respuesta">
-        <button class="boton boton-respuesta" type="button" data-respuesta="true">Sí estaba</button>
-        <button class="boton boton-respuesta" type="button" data-respuesta="false">No estaba</button>
+    <div class="card">
+      <h2>Pregunta ${partida.indicePregunta + 1} de ${partida.preguntas.length}</h2>
+      <p style="font-size: 1.2rem; margin: 1.5rem 0;">¿Estaba el objeto <strong>${preguntaActual.objeto}</strong> en la escena?</p>
+      <div style="display: flex; gap: 1rem; justify-content: center;">
+        <button id="btn-si">Sí</button>
+        <button id="btn-no" style="background: #b91c1c; border-color: #f87171;">No</button>
       </div>
-    </main>
+    </div>
   `
+
+  raiz.querySelector('#btn-si')?.addEventListener('click', () => procesarRespuesta(true))
+  raiz.querySelector('#btn-no')?.addEventListener('click', () => procesarRespuesta(false))
 }
 
-function dibujarResultado(): void {
+function procesarRespuesta(afirmacion: boolean) {
+  if (!partida) return
+  partida = responderPregunta(partida, afirmacion)
+  renderizarPregunta()
+}
+
+function renderizarResultado() {
   if (!partida) return
 
   raiz.innerHTML = `
-    <main class="panel panel-resultado" aria-live="polite">
-      <p class="etiqueta">PARTIDA TERMINADA</p>
-      <h1>Resultado final</h1>
-      <p class="resultado-puntaje">${partida.puntaje} de ${partida.preguntas.length}</p>
-      <p class="introduccion">Respuestas correctas</p>
-      <button class="boton boton-principal" type="button" data-accion="reiniciar">Jugar otra vez</button>
-    </main>
+    <div class="card">
+      <h2>¡Partida Finalizada!</h2>
+      <p style="font-size: 1.5rem; margin: 1.5rem 0;">Tu puntaje final es: <strong>${partida.puntaje}</strong></p>
+      <button id="btn-reiniciar">Jugar de nuevo</button>
+    </div>
   `
+
+  raiz.querySelector('#btn-reiniciar')?.addEventListener('click', () => {
+    renderizarPantallaInicio()
+  })
 }
 
-function dibujarEstadoPartida(): void {
-  if (!partida) return
-
-  if (partida.fase === 'observacion') {
-    dibujarObservacion()
-  } else if (partida.fase === 'preguntas') {
-    detenerTemporizadorVisual()
-    dibujarPreguntas()
-  } else {
-    detenerTemporizadorVisual()
-    dibujarResultado()
-  }
-}
-
-raiz.addEventListener('click', (evento: MouseEvent) => {
-  const objetivo = evento.target
-  if (!(objetivo instanceof Element)) return
-
-  const boton = objetivo.closest<HTMLButtonElement>('button')
-  if (!boton) return
-
-  if (boton.dataset.accion === 'iniciar') {
-    partida = crearPartida()
-    dibujarEstadoPartida()
-  } else if (boton.dataset.accion === 'reiniciar') {
-    partida = null
-    detenerTemporizadorVisual()
-    dibujarInicio()
-  } else if (boton.dataset.respuesta !== undefined && partida) {
-    responderPregunta(partida, boton.dataset.respuesta === 'true')
-    dibujarEstadoPartida()
-  }
-})
-
-dibujarInicio()
+renderizarPantallaInicio()

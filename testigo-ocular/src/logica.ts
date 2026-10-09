@@ -107,3 +107,35 @@ export function responderPregunta(
 
   return estado
 }
+
+// dificultad
+
+export type Dificultad = 'facil' | 'normal' | 'pesadilla';
+
+export interface ConfiguracionDificultad {
+  nombre: string;
+  duracionMs: number;
+  cantidadObjetos: number;
+  cantidadPreguntas: number;
+}
+
+export const NIVELES_DIFICULTAD: Record<Dificultad, ConfiguracionDificultad> = {
+  facil: {
+    nombre: 'Explorador (Fácil)',
+    duracionMs: 7000, // 7 segundos
+    cantidadObjetos: 4,
+    cantidadPreguntas: 2
+  },
+  normal: {
+    nombre: 'Testigo (Normal)',
+    duracionMs: 5000, // 5 segundos
+    cantidadObjetos: 5,
+    cantidadPreguntas: 3
+  },
+  pesadilla: {
+    nombre: 'Pesadilla (Difícil)',
+    duracionMs: 3000, // 3 segundos
+    cantidadObjetos: 6,
+    cantidadPreguntas: 4
+  }
+};
